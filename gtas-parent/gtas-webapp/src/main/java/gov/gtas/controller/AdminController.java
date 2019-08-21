@@ -9,21 +9,25 @@ import gov.gtas.constant.AuditLogConstants;
 import gov.gtas.enumtype.AuditActionType;
 import gov.gtas.error.ErrorDetailInfo;
 import gov.gtas.model.ApiAccess;
+import gov.gtas.services.dto.ApplicationStatisticsDTO;
 import gov.gtas.model.AuditRecord;
+import gov.gtas.model.lookup.Carrier;
+import gov.gtas.model.lookup.Country;
+import gov.gtas.model.lookup.Airport;
 import gov.gtas.model.lookup.AppConfiguration;
-import gov.gtas.services.AppConfigurationService;
-import gov.gtas.services.ApiAccessService;
-import gov.gtas.services.AuditLogPersistenceService;
-import gov.gtas.services.ErrorPersistenceService;
+import gov.gtas.services.*;
 import gov.gtas.util.DateCalendarUtils;
 import gov.gtas.vo.AuditRecordVo;
 import gov.gtas.vo.SettingsVo;
+import gov.gtas.vo.LogFileVo;
 
 import java.text.ParseException;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.io.File;
+import java.io.IOException;
 
 import javax.validation.Valid;
 
@@ -32,6 +36,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -56,23 +63,156 @@ public class AdminController {
 
 	private static final Logger logger = LoggerFactory
 			.getLogger(AdminController.class);
-        
-        public static final String MATCHING_THRESHOLD = "MATCHING_THRESHOLD";
-        public static final String FLIGHT_RANGE ="FLIGHT_RANGE";
-        public static final String APIS_ONLY_FLAG = "APIS_ONLY_FLAG";
-        public static final String APIS_VERSION = "APIS_VERSION";
-     
-        @Autowired
-        AppConfigurationService appConfigurationService;
-        
-	@Autowired
-	private AuditLogPersistenceService auditService;
 
-	@Autowired
-	private ErrorPersistenceService errorService;
-	
-	@Autowired
-	private ApiAccessService apiAccessService;
+  private static final String MATCHING_THRESHOLD = "MATCHING_THRESHOLD";
+  private static final String FLIGHT_RANGE ="FLIGHT_RANGE";
+  private static final String APIS_ONLY_FLAG = "APIS_ONLY_FLAG";
+  private static final String APIS_VERSION = "APIS_VERSION";
+  private static final String MAX_RULE_HITS = "MAX_RULE_HITS";
+
+  private final
+  AppConfigurationService appConfigurationService;
+
+	private final AuditLogPersistenceService auditService;
+
+	private final ErrorPersistenceService errorService;
+
+	private final AdminService adminService;
+
+	private final ApiAccessService apiAccessService;
+  
+	private final CarrierService carrierService;
+  
+	private final CountryService countryService;
+  
+	private final AirportService airportService;
+
+  private final FileService fileService;
+
+    @Autowired
+	public AdminController(AppConfigurationService appConfigurationService, AuditLogPersistenceService auditService, ErrorPersistenceService errorService, AdminService adminService, ApiAccessService apiAccessService, CarrierService carrierService, CountryService countryService, AirportService airportService, FileService fileService) {
+		this.appConfigurationService = appConfigurationService;
+		this.auditService = auditService;
+		this.errorService = errorService;
+		this.adminService = adminService;
+		this.apiAccessService = apiAccessService;
+		this.carrierService = carrierService;
+		this.countryService = countryService;
+		this.airportService = airportService;
+		this.fileService = fileService;
+	}
+
+	// ------------------------------------------------- //
+  //ADMIN LOG FILE DOWNLOAD
+  // ------------------------------------------------- //
+
+	@RequestMapping(method = RequestMethod.GET, value = "/api/statistics")
+	public ApplicationStatisticsDTO getApplicationStatistics() {
+		return adminService.createApplicationStatisticsDto();
+	}
+
+  //GET LIST OF AVAILABLE LOG TYPES
+  @RequestMapping(method = RequestMethod.GET, value = "/api/logs")
+  public String[] getLogTypeList() throws IOException {
+    return fileService.getLogTypeList();
+  }
+
+  // GET LIST OF AVAILABLE LOG FILES BY LOG TYPE. SHOW ZIP FILES ONLY
+  @RequestMapping(method = RequestMethod.GET, value = "/api/logs/{type}")
+  public List<LogFileVo> getLogZipList(@PathVariable("type") String logType) throws IOException {
+    return fileService.getLogZipList(logType);
+  }
+
+  //GET ZIP BINARY
+  @RequestMapping(method = RequestMethod.GET, value = "/api/logs/{type}/{file}", produces="application/zip")
+    public ResponseEntity<Resource> getLogZip(@PathVariable("type") String logType, @PathVariable("file") String logFile)  throws IOException {
+      File file = fileService.getLogZip(logType, logFile);
+      HttpHeaders headers = new HttpHeaders();
+
+      headers.setContentType(MediaType.valueOf("application/zip"));
+      headers.set("content-disposition", "inline; filename=\"" + file.getName() + "\"");
+      headers.set("content-length", String.valueOf(file.length()));
+
+      FileSystemResource fileSystemResource = new FileSystemResource(file);
+
+      return new ResponseEntity<>(fileSystemResource, headers, HttpStatus.OK);
+    }
+
+  //carrier
+	@RequestMapping(method = RequestMethod.GET, value = "/api/carrier")
+	public List<Carrier> getAllCarrier(){
+		return carrierService.findAll();
+	}
+	@RequestMapping(method = RequestMethod.POST, value = "/api/carrier", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
+	public Carrier createCarrier(@RequestBody @Valid Carrier carrier) {
+		return carrierService.create(carrier);
+	}
+	@RequestMapping(method = RequestMethod.PUT, value = "/api/carrier", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
+	public Carrier updateCarrier(@RequestBody @Valid Carrier carrier) {
+		return carrierService.update(carrier);
+	}
+	@RequestMapping(method = RequestMethod.DELETE, value = "/api/carrier/{id}")
+	public Carrier deleteCarrier(@PathVariable Long id) {
+		return carrierService.delete(id);
+	}
+	@RequestMapping(method = RequestMethod.PUT, value = "/api/carrier/restore")
+	public Carrier restoreCarrier(@RequestBody @Valid Carrier carrier) {
+		return carrierService.restore(carrier);
+	}
+	@RequestMapping(method = RequestMethod.PUT, value = "/api/carrier/restoreAll")
+	public int restoreAllCarrier() {
+		return carrierService.restoreAll();
+	}
+
+  //country
+	@RequestMapping(method = RequestMethod.GET, value = "/api/country")
+	public List<Country> getAllCountry(){
+		return countryService.findAll();
+	}
+	@RequestMapping(method = RequestMethod.POST, value = "/api/country", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
+	public Country createCountry(@RequestBody @Valid Country country) {
+		return countryService.create(country);
+	}
+	@RequestMapping(method = RequestMethod.PUT, value = "/api/country", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
+	public Country updateCountry(@RequestBody @Valid Country country) {
+		return countryService.update(country);
+	}
+	@RequestMapping(method = RequestMethod.DELETE, value = "/api/country/{id}")
+	public Country deleteCountry(@PathVariable Long id) {
+		return countryService.delete(id);
+	}
+	@RequestMapping(method = RequestMethod.PUT, value = "/api/country/restore")
+	public Country restoreCountry(@RequestBody @Valid Country country) { return countryService.restore(country); }
+	@RequestMapping(method = RequestMethod.PUT, value = "/api/country/restoreAll")
+	public int restoreAllCountry() {
+		return countryService.restoreAll();
+	}
+
+  //airport
+	@RequestMapping(method = RequestMethod.GET, value = "/api/airport")
+	public List<Airport> getAllAirport(){
+		return airportService.findAll();
+	}
+	@RequestMapping(method = RequestMethod.POST, value = "/api/airport", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
+	public Airport createAirport(@RequestBody @Valid Airport airport) {
+		return airportService.create(airport);
+	}
+	@RequestMapping(method = RequestMethod.PUT, value = "/api/airport", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
+	public Airport updateAirport(@RequestBody @Valid Airport airport) {
+		return airportService.update(airport);
+	}
+	@RequestMapping(method = RequestMethod.DELETE, value = "/api/airport/{id}")
+	public Airport deleteAirport(@PathVariable Long id) {
+		return airportService.delete(id);
+	}
+	@RequestMapping(method = RequestMethod.PUT, value = "/api/airport/restore")
+	public Airport restoreAirport(@RequestBody @Valid Airport airport) {
+		return airportService.restore(airport);
+	}
+	@RequestMapping(method = RequestMethod.PUT, value = "/api/airport/restoreAll")
+	public int restoreAllAirport() {
+		return airportService.restoreAll();
+	}
 
 	@RequestMapping(method = RequestMethod.GET, value = "/auditlog")
 	public List<AuditRecordVo> getAuditlog(
@@ -101,7 +241,7 @@ public class AdminController {
 		}
 		return fetchAuditLogData(user, actionType, st, nd);
 	}
-	
+
 	@RequestMapping(method = RequestMethod.GET, value = "/apiAccess")
 	public List<ApiAccess> getAllApiAccess(){
 		return apiAccessService.findAll();
@@ -143,6 +283,7 @@ public class AdminController {
 		settingsVo.setFlightRange(Double.parseDouble(appConfigurationService.findByOption(FLIGHT_RANGE).getValue()));
 		settingsVo.setMaxPassengerQueryResult(Integer.parseInt(appConfigurationService.findByOption(MAX_PASSENGER_QUERY_RESULT).getValue()));
 		settingsVo.setMaxFlightQueryResult(Integer.parseInt(appConfigurationService.findByOption(MAX_FLIGHT_QUERY_RESULT).getValue()));
+		settingsVo.setMaxRuleHit(Integer.parseInt(appConfigurationService.findByOption(MAX_RULE_HITS).getValue()));
 
                 AppConfiguration appConfigApisFlag = appConfigurationService.findByOption(APIS_ONLY_FLAG);
                 if (appConfigApisFlag != null)
@@ -155,7 +296,7 @@ public class AdminController {
                   settingsVo.setApisVersion(appConfigApisVersion.getValue());
                 }
 
-		return settingsVo; 
+		return settingsVo;
 	}
 	@RequestMapping(method = RequestMethod.PUT, value = "/settingsinfo")
 	public ResponseEntity setSettings(@Valid SettingsVo settings, BindingResult result, Model model) {
@@ -167,11 +308,11 @@ public class AdminController {
 		} else {
 
 			AppConfiguration appConfig;
-			
+
 			appConfig = appConfigurationService.findByOption(MATCHING_THRESHOLD);
 			appConfig.setValue(String.valueOf(settings.getMatchingThreshold()));
 			appConfigurationService.save(appConfig);
-			
+
 			appConfig = appConfigurationService.findByOption(FLIGHT_RANGE);
 			appConfig.setValue(String.valueOf(settings.getFlightRange()));
 			appConfigurationService.save(appConfig);
@@ -184,43 +325,47 @@ public class AdminController {
 			appConfig.setValue(String.valueOf(settings.getMaxFlightQueryResult()));
 			appConfigurationService.save(appConfig);
 
+			appConfig = appConfigurationService.findByOption(MAX_RULE_HITS);
+			appConfig.setValue(String.valueOf(settings.getMaxRuleHit()));
+			appConfigurationService.save(appConfig);
+
 			if (settings.getApisOnlyFlag() != null && !settings.getApisOnlyFlag().isEmpty())
                         {
 			    appConfig = appConfigurationService.findByOption(APIS_ONLY_FLAG);
                             if (appConfig != null)
                             {
-			        appConfig.setValue(String.valueOf(settings.getApisOnlyFlag())); 
+			        appConfig.setValue(String.valueOf(settings.getApisOnlyFlag()));
                                 appConfigurationService.save(appConfig);
                             }
                             else
                             {
-                              AppConfiguration newAppConfig = new AppConfiguration(); 
+                              AppConfiguration newAppConfig = new AppConfiguration();
                               newAppConfig.setDescription("Is APIS the only message source.");
                               newAppConfig.setOption(APIS_ONLY_FLAG);
                               newAppConfig.setValue(settings.getApisOnlyFlag());
                               appConfigurationService.save(newAppConfig);
                             }
                         }
-                        
+
                         if (settings.getApisVersion() != null && !settings.getApisVersion().isEmpty())
                         {
 			    appConfig = appConfigurationService.findByOption(APIS_VERSION);
                             if (appConfig != null)
                             {
-			        appConfig.setValue(String.valueOf(settings.getApisVersion())); 
+			        appConfig.setValue(String.valueOf(settings.getApisVersion()));
                                 appConfigurationService.save(appConfig);
                             }
                             else
                             {
-                              AppConfiguration newAppConfig = new AppConfiguration(); 
+                              AppConfiguration newAppConfig = new AppConfiguration();
                               newAppConfig.setDescription("Latest APIS version being used.");
                               newAppConfig.setOption(APIS_VERSION);
                               newAppConfig.setValue(settings.getApisVersion());
-                              appConfigurationService.save(newAppConfig);                               
+                              appConfigurationService.save(newAppConfig);
                             }
                         }
-                        
-       
+
+
 			return new ResponseEntity<>(HttpStatus.CREATED);
 		}
 	}

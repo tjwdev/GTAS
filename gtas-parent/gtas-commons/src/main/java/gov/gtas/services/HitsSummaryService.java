@@ -14,7 +14,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface HitsSummaryService {
 
-	public List<HitDetail> findByPassengerId(Long id);
+	public HitsSummary findByPassengerId(Long id);
 
 	public Iterable<HitsSummary> findAll();
 
@@ -31,4 +31,6 @@ public interface HitsSummaryService {
 
 	public List<HitsSummary> findByFlightIdAndPassengerId(Long fightId,
 			Long passengerId);
+
+	public HitsSummary getMostRecentHitsSummary();
 }

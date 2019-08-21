@@ -22,7 +22,6 @@ import gov.gtas.services.watchlist.WatchlistPersistenceService;
 import gov.gtas.svc.util.WatchlistBuilder;
 import gov.gtas.svc.util.WatchlistServiceJsonResponseHelper;
 
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -142,7 +141,7 @@ public class WatchlistServiceImpl implements WatchlistService {
 	}
 
 	@Override
-	public void updateWatchlistItemCategory(Long categoryID, Long watchlistItemId) {
+	public synchronized void updateWatchlistItemCategory(Long categoryID, Long watchlistItemId) {
 		//
 		WatchlistItem watchlistItem = this.fetchWatchlistItemById(watchlistItemId);
 		watchlistItem.setWatchlistCategory(fetchWatchlistCategoryById(Long.parseLong(categoryID.toString())));
@@ -167,5 +166,9 @@ public class WatchlistServiceImpl implements WatchlistService {
 		return this.watchlistPersistenceService.findItemsByWatchlistName(watchlistName);
 	}
 
+	@Override
+    public void createWatchlistCategory(WatchlistCategory wlCat) {
+        this.watchlistPersistenceService.saveWatchlistCategory(wlCat);
+    }
 
 }

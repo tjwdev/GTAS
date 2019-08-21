@@ -14,13 +14,12 @@ import gov.gtas.parsers.edifact.EdifactParser;
 import gov.gtas.parsers.exception.ParseException;
 import gov.gtas.parsers.vo.PnrVo;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+
+import static org.junit.Assert.*;
 
 public class PnrGovParserTest implements ParserTestHelper {
     private static final String PNR_MESSAGE_PG_77 = "/pnr-messages/pnrMessagePg77.txt";
@@ -30,6 +29,9 @@ public class PnrGovParserTest implements ParserTestHelper {
     private static final String BIG_PNR = "/pnr-messages/pnrWithBags.txt";
     private static final String PNR_WITH_BAGS = "/pnr-messages/bigMessagePnr.txt";
     private static final String PNR_EXAMPLE = "/pnr-messages/pnrMessageExample.txt";
+    private static final String PNR_EDGE = "/pnr-messages/pnrEdge.txt";
+    private static final String failingMessage1 = "/pnr-messages/failingMessage1.txt";
+
     private EdifactParser<PnrVo> parser;
 
     @Before
@@ -59,7 +61,7 @@ public class PnrGovParserTest implements ParserTestHelper {
         String message77 = getMessageText(PNR_MESSAGE_PG_77);
         PnrVo vo = this.parser.parse(message77);
         LocalDateTime dateBooked = getLocalDateTime(vo.getDateBooked());
-        LocalDateTime May23rd2013At212400 = LocalDateTime.of(2013, 5, 23, 21, 24);
+        LocalDateTime May23rd2013At212400 = LocalDateTime.of(2013, 5, 23, 18, 13, 48);
         assertTrue(May23rd2013At212400.isEqual(dateBooked));
     }
 
@@ -68,7 +70,7 @@ public class PnrGovParserTest implements ParserTestHelper {
         String message76 = getMessageText(PNR_MESSAGE_PG_76);
         PnrVo vo = this.parser.parse(message76);
         LocalDate dateBooked = getLocalDate(vo.getDateBooked());
-        LocalDate Feb142013 = LocalDate.of(2013, 2, 14);
+        LocalDate Feb142013 = LocalDate.of(2013, 2, 15);
         assertTrue(Feb142013.isEqual(dateBooked));
     }
 
@@ -89,15 +91,30 @@ public class PnrGovParserTest implements ParserTestHelper {
     public void pnrWithBgs() throws IOException, URISyntaxException, ParseException {
         String pnrWithBags = getMessageText(PNR_WITH_BAGS);
         PnrVo vo = this.parser.parse(pnrWithBags);
-        assertTrue(!vo.getBags().isEmpty());
+        assertFalse(vo.getBagVos().isEmpty());
     }
 
     @Test
     public void pnrExampleTest() throws IOException, URISyntaxException, ParseException {
         String pnrExample = getMessageText(PNR_EXAMPLE);
         PnrVo vo = this.parser.parse(pnrExample);
-        int bagsInPNRExample = 18;
-        assertEquals(bagsInPNRExample, vo.getBags().size());
+        Integer bagsInPNRExample = 18;
+        assertEquals(bagsInPNRExample, vo.getTotal_bag_count());
     }
+
+    @Test
+    public void testingEscapeCharacter() throws IOException, URISyntaxException, ParseException {
+        String pnrExample = getMessageText(PNR_EDGE);
+        PnrVo vo = this.parser.parse(pnrExample);
+        assertEquals(vo.getEmails().get(0).getAddress(), " MOLLY_LOUUNT+50BB@GMAIL.COM");
+    }
+
+
+    /*    @Test
+    public void failingMessage1() throws IOException, URISyntaxException, ParseException {
+        String pnrExample = getMessageText(failingMessage1);
+        PnrVo dob = this.parser.parse(pnrExample);
+        System.out.println("test");
+    }*/
 
 }
